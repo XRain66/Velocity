@@ -155,7 +155,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
           } else {
             mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
                 new AuthSessionHandler(server, inbound,
-                    GameProfile.forOfflinePlayer(login.getUsername()), false));
+                    GameProfile.forOfflinePlayer(login.getUsername()), false, false));
           }
         });
       });
@@ -257,7 +257,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
               }
               // All went well, initialize the session.
               mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
-                  new AuthSessionHandler(server, inbound, profile, true));
+                  new AuthSessionHandler(server, inbound, profile, true, false));
             } else {
               // Try LittleSkin authentication if Mojang authentication fails
               String littleSkinUrl = String.format(LITTLESKIN_HASJOINED_URL,

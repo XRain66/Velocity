@@ -149,7 +149,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
 
   private static final ComponentLogger logger = ComponentLogger.logger(ConnectedPlayer.class);
 
-  private final Identity identity = new IdentityImpl();
+  private final Identity identity;
   /**
    * The actual Minecraft connection. This is actually a wrapper object around the Netty channel.
    */
@@ -176,14 +176,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   private final ResourcePackHandler resourcePackHandler;
   private final BundleDelimiterHandler bundleHandler = new BundleDelimiterHandler(this);
 
-  private final @NotNull Pointers pointers =
-      Player.super.pointers().toBuilder()
-          .withDynamic(Identity.UUID, this::getUniqueId)
-          .withDynamic(Identity.NAME, this::getUsername)
-          .withDynamic(Identity.DISPLAY_NAME, () -> Component.text(this.getUsername()))
-          .withDynamic(Identity.LOCALE, this::getEffectiveLocale)
-          .withStatic(PermissionChecker.POINTER, getPermissionChecker())
-          .withStatic(FacetPointers.TYPE, Type.PLAYER).build();
+  private final @NotNull Pointers pointers;
   private @Nullable String clientBrand;
   private @Nullable Locale effectiveLocale;
   private final @Nullable IdentifiedKey playerKey;
@@ -191,24 +184,27 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   private final ChatQueue chatQueue;
   private final ChatBuilderFactory chatBuilderFactory;
 
-  ConnectedPlayer(VelocityServer server, GameProfile profile, MinecraftConnection connection,
-                  @Nullable InetSocketAddress virtualHost, @Nullable String rawVirtualHost, boolean onlineMode,
-                  @Nullable IdentifiedKey playerKey, boolean isLittleSkinAuthentication) {
+  public ConnectedPlayer(VelocityServer server, GameProfile profile,
+      MinecraftConnection connection, @Nullable InetSocketAddress virtualHost,
+      @Nullable String rawVirtualHost, boolean onlineMode,
+      @Nullable IdentifiedKey playerKey, boolean isLittleSkinAuthentication) {
     this.server = server;
     this.profile = profile;
     this.connection = connection;
     this.virtualHost = virtualHost;
     this.rawVirtualHost = rawVirtualHost;
-    this.permissionFunction = PermissionFunction.ALWAYS_UNDEFINED;
-    this.connectionPhase = connection.getType().getInitialClientPhase();
     this.onlineMode = onlineMode;
     this.playerKey = playerKey;
     this.isLittleSkinAuthentication = isLittleSkinAuthentication;
+    this.identity = Identity.identity(profile.getId());
+    this.pointers = Pointers.empty();
+    this.permissionFunction = PermissionFunction.ALWAYS_UNDEFINED;
+    this.connectionPhase = connection.getType().getInitialClientPhase();
 
     if (connection.getProtocolVersion().noLessThan(ProtocolVersion.MINECRAFT_1_19_3)) {
       this.tabList = new VelocityTabList(this);
-    } else if (connection.getProtocolVersion().noLessThan(ProtocolVersion.MINECRAFT_1_8)) {
-      this.tabList = new KeyedVelocityTabList(this, server);
+      this.playerListHeader = Component.empty();
+      this.playerListFooter = Component.empty();
     } else {
       this.tabList = new VelocityTabListLegacy(this, server);
     }
