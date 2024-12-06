@@ -2,13 +2,13 @@ name: Build Velocity
 
 on:
   push:
-    branches: [ "main", "master", "dev" ]
+    branches: [ "main", "master", "dev", "new" ]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
       - '.gitignore'
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master" , "new"]
   workflow_dispatch:
 
 jobs:
