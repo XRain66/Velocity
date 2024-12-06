@@ -367,12 +367,11 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
   }
 
   private void handleSuccessfulLogin() {
-    // Create a GameProfile with the login username
+    // Create a GameProfile with the login username using the public constructor
     GameProfile profile = new GameProfile(
         UUID.randomUUID(),
         login.getUsername(),
-        login.getUsername(),
-        ImmutableList.of()
+        ImmutableList.<Property>of()
     );
     // All went well, initialize the session.
     mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
