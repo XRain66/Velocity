@@ -69,6 +69,8 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
       System.getProperty("mojang.sessionserver",
               "https://sessionserver.mojang.com/session/minecraft/hasJoined")
           .concat("?username=%s&serverId=%s");
+  private static final String LITTLESKIN_HASJOINED_URL =
+      "https://littleskin.cn/api/yggdrasil/sessionserver/session/minecraft/hasJoined?username=%s&serverId=%s";
 
   private final VelocityServer server;
   private final MinecraftConnection mcConnection;
@@ -255,16 +257,61 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
               // All went well, initialize the session.
               mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
                   new AuthSessionHandler(server, inbound, profile, true));
-            } else if (response.statusCode() == 204) {
-              // Apparently an offline-mode user logged onto this online-mode proxy.
-              inbound.disconnect(
-                  Component.translatable("velocity.error.online-mode-only", NamedTextColor.RED));
             } else {
-              // Something else went wrong
-              logger.error(
-                  "Got an unexpected error code {} whilst contacting Mojang to log in {} ({})",
-                  response.statusCode(), login.getUsername(), playerIp);
-              inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
+              // Try LittleSkin authentication if Mojang authentication fails
+              String littleSkinUrl = String.format(LITTLESKIN_HASJOINED_URL,
+                  urlFormParameterEscaper().escape(login.getUsername()), serverId);
+              if (server.getConfiguration().shouldPreventClientProxyConnections()) {
+                littleSkinUrl += "&ip=" + urlFormParameterEscaper().escape(playerIp);
+              }
+
+              final HttpRequest littleSkinRequest = HttpRequest.newBuilder()
+                  .setHeader("User-Agent",
+                      server.getVersion().getName() + "/" + server.getVersion().getVersion())
+                  .uri(URI.create(littleSkinUrl))
+                  .build();
+
+              httpClient.sendAsync(littleSkinRequest, HttpResponse.BodyHandlers.ofString())
+                  .whenCompleteAsync((littleSkinResponse, littleSkinThrowable) -> {
+                    if (mcConnection.isClosed()) {
+                      return;
+                    }
+
+                    if (littleSkinThrowable != null) {
+                      logger.error("Unable to authenticate player with LittleSkin", littleSkinThrowable);
+                      inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
+                      return;
+                    }
+
+                    if (littleSkinResponse.statusCode() == 200) {
+                      final GameProfile profile = GENERAL_GSON.fromJson(littleSkinResponse.body(),
+                          GameProfile.class);
+                      // Verify key for 1.19.1+ even for LittleSkin
+                      if (inbound.getIdentifiedKey() != null
+                          && inbound.getIdentifiedKey().getKeyRevision() == IdentifiedKey.Revision.LINKED_V2
+                          && inbound.getIdentifiedKey() instanceof final IdentifiedKeyImpl key) {
+                        if (!key.internalAddHolder(profile.getId())) {
+                          inbound.disconnect(
+                              Component.translatable("multiplayer.disconnect.invalid_public_key"));
+                          return;
+                        }
+                      }
+                      // LittleSkin authentication successful
+                      mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
+                          new AuthSessionHandler(server, inbound, profile, true));
+                    } else if (littleSkinResponse.statusCode() == 204) {
+                      // Offline mode user tried to connect to online mode server
+                      inbound.disconnect(
+                          Component.translatable("velocity.error.online-mode-only", NamedTextColor.RED));
+                    } else {
+                      // Both Mojang and LittleSkin authentication failed
+                      logger.error(
+                          "Authentication failed for {} ({}) - Mojang: {}, LittleSkin: {}",
+                          login.getUsername(), playerIp, response.statusCode(), 
+                          littleSkinResponse.statusCode());
+                      inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
+                    }
+                  }, mcConnection.eventLoop());
             }
           }, mcConnection.eventLoop())
           .thenRun(() -> {
