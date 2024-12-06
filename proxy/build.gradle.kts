@@ -18,16 +18,26 @@ tasks {
 
     jar {
         manifest {
+            attributes["Main-Class"] = "com.velocitypowered.proxy.Velocity"
             attributes["Implementation-Title"] = "Velocity"
+            attributes["Implementation-Version"] = project.version
             attributes["Implementation-Vendor"] = "Velocity Contributors"
             attributes["Multi-Release"] = "true"
         }
     }
 
     shadowJar {
+        manifest {
+            attributes["Main-Class"] = "com.velocitypowered.proxy.Velocity"
+            attributes["Implementation-Title"] = "Velocity"
+            attributes["Implementation-Version"] = project.version
+            attributes["Implementation-Vendor"] = "Velocity Contributors"
+            attributes["Multi-Release"] = "true"
+        }
+
         transform(Log4j2PluginsCacheFileTransformer::class.java)
 
-        // Exclude all the collection types we don"t intend to use
+        // Exclude all the collection types we don't intend to use
         exclude("it/unimi/dsi/fastutil/booleans/**")
         exclude("it/unimi/dsi/fastutil/bytes/**")
         exclude("it/unimi/dsi/fastutil/chars/**")
@@ -36,7 +46,7 @@ tasks {
         exclude("it/unimi/dsi/fastutil/longs/**")
         exclude("it/unimi/dsi/fastutil/shorts/**")
 
-        // Exclude the fastutil IO utilities - we don"t use them.
+        // Exclude the fastutil IO utilities - we don't use them.
         exclude("it/unimi/dsi/fastutil/io/**")
 
         // Exclude most of the int types - Object2IntMap have a values() method that returns an

@@ -3,6 +3,10 @@ name: Build Velocity
 on:
   push:
     branches: [ "main", "master", "dev" ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
@@ -16,6 +20,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       
       - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v3
@@ -28,18 +34,25 @@ jobs:
         run: chmod +x gradlew
         
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew clean shadowJar --no-daemon
         
       - name: Upload build artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: Velocity-Artifacts
+          name: Velocity-Build
           path: |
-            proxy/build/libs/*.jar
-            !proxy/build/libs/*-sources.jar
-            !proxy/build/libs/*-javadoc.jar
-            !proxy/build/libs/*-all.jar
+            proxy/build/libs/velocity-proxy-*-all.jar
           if-no-files-found: error
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Upload test results
         if: always()

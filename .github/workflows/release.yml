@@ -10,6 +10,11 @@ on:
         description: 'Version to release'
         required: true
         default: '1.0.0'
+      prerelease:
+        description: 'Is this a pre-release?'
+        type: boolean
+        required: true
+        default: false
 
 jobs:
   build-and-release:
@@ -19,6 +24,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -31,15 +38,17 @@ jobs:
         run: chmod +x gradlew
         
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew clean shadowJar --no-daemon
         
       - name: Get version
         id: get_version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "prerelease=${{ github.event.inputs.prerelease }}" >> $GITHUB_OUTPUT
           else
             echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
       
       - name: Create Release
@@ -48,12 +57,9 @@ jobs:
           name: Release ${{ steps.get_version.outputs.version }}
           tag_name: v${{ steps.get_version.outputs.version }}
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.get_version.outputs.prerelease }}
           files: |
-            proxy/build/libs/*.jar
-            !proxy/build/libs/*-sources.jar
-            !proxy/build/libs/*-javadoc.jar
-            !proxy/build/libs/*-all.jar
+            proxy/build/libs/velocity-proxy-*-all.jar
           body: |
             Velocity Release ${{ steps.get_version.outputs.version }}
             
@@ -68,6 +74,29 @@ jobs:
             
             ### Note
             Make sure to backup your configuration before updating.
+            
+            ### 新特性
+            - 添加 LittleSkin 验证支持
+            - 优化正版验证流程
+            
+            ### 改进
+            - 改进了验证失败时的错误提示
+            - 添加了更详细的日志记录
+            
+            ### 安装说明
+            1. 下载 velocity-proxy-xxx-all.jar 文件
+            2. 替换你现有的 Velocity jar 文件
+            3. 重启服务器
+            
+            ### 注意事项
+            - 更新前请备份你的配置文件
+            - 该版本需要 Java 17 或更高版本
+            
+            ### 验证流程说明
+            现在的验证流程为：
+            1. 首先尝试 Mojang 官方验证
+            2. 如果 Mojang 验证失败，自动尝试 LittleSkin 验证
+            3. 两种验证都失败才会断开连接
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -75,9 +104,5 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: Velocity-${{ steps.get_version.outputs.version }}
-          path: |
-            proxy/build/libs/*.jar
-            !proxy/build/libs/*-sources.jar
-            !proxy/build/libs/*-javadoc.jar
-            !proxy/build/libs/*-all.jar
+          path: proxy/build/libs/velocity-proxy-*-all.jar
           if-no-files-found: error
