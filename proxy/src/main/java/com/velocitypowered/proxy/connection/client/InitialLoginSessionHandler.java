@@ -52,6 +52,7 @@ import java.security.KeyPair;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -365,9 +366,11 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
   }
 
   private void handleSuccessfulLogin() {
+    // Create a GameProfile with the login username
+    GameProfile profile = new GameProfile(UUID.randomUUID(), login.getUsername());
     // All went well, initialize the session.
     mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
-        new AuthSessionHandler(server, inbound, login.getGameProfile(), true));
+        new AuthSessionHandler(server, inbound, profile, true));
   }
 
   private EncryptionRequestPacket generateEncryptionRequest() {
