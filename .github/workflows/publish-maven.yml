@@ -1,18 +1,18 @@
-name: Build Velocity
+name: Publish to Maven Local
 
 on:
+  workflow_dispatch:  # 允许手动触发
   push:
     branches: [ "main", "master", "dev", "new" ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
-  pull_request:
-    branches: [ "main", "master" , "new"]
-  workflow_dispatch:
+    paths:
+      - 'api/**'
+      - 'proxy/**'
+      - 'native/**'
+      - 'build.gradle'
+      - 'settings.gradle'
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -33,29 +33,16 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
         
-      - name: Format code with Spotless
-        run: ./gradlew :velocity-proxy:spotlessApply
-        
       - name: Publish to Maven Local
         run: ./gradlew publishToMavenLocal --no-daemon
         
-      - name: Build with Gradle
-        run: ./gradlew clean shadowJar --no-daemon
-        
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: Velocity-Build
-          path: |
-            proxy/build/libs/velocity-proxy-*-all.jar
-            ~/.m2/repository/com/velocitypowered/
-          if-no-files-found: error
-
       - name: Upload Maven Local Repository
         uses: actions/upload-artifact@v3
         with:
           name: Maven-Local-Repository
-          path: ~/.m2/repository/com/velocitypowered/
+          path: |
+            ~/.m2/repository/com/velocitypowered/velocity-api/
+            ~/.m2/repository/com/velocitypowered/velocity-proxy/
           if-no-files-found: error
 
       - name: Cache Gradle packages
