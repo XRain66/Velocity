@@ -146,11 +146,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
         mcConnection.eventLoop().execute(() -> {
           if (!result.isForceOfflineMode()
               && (server.getConfiguration().isOnlineMode() || result.isOnlineModeAllowed())) {
-            // Request encryption.
-            EncryptionRequestPacket request = generateEncryptionRequest();
-            this.verify = Arrays.copyOf(request.getVerifyToken(), 4);
-            mcConnection.write(request);
-            this.currentState = LoginState.ENCRYPTION_REQUEST_SENT;
+            startAuthenticationSequence();
           } else {
             mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
                 new AuthSessionHandler(server, inbound,
@@ -164,6 +160,20 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
     });
 
     return true;
+  }
+
+  private void startAuthenticationSequence() {
+    if (!server.getConfiguration().isOnlineMode()) {
+      // No need to authenticate, go ahead and enable compression if we need it.
+      handleSuccessfulLogin();
+      return;
+    }
+
+    // Request encryption
+    EncryptionRequestPacket request = generateEncryptionRequest();
+    this.verify = Arrays.copyOf(request.getVerifyToken(), 4);
+    mcConnection.write(request);
+    this.currentState = LoginState.ENCRYPTION_REQUEST_SENT;
   }
 
   @Override
@@ -211,125 +221,158 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
         url += "&ip=" + urlFormParameterEscaper().escape(playerIp);
       }
 
-      final HttpRequest httpRequest = HttpRequest.newBuilder()
-              .setHeader("User-Agent",
-                      server.getVersion().getName() + "/" + server.getVersion().getVersion())
-              .uri(URI.create(url))
-              .build();
-      final HttpClient httpClient = server.createHttpClient();
-      httpClient.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString())
-          .whenCompleteAsync((response, throwable) -> {
-            if (mcConnection.isClosed()) {
-              // The player disconnected after we authenticated them.
-              return;
-            }
-
-            if (throwable != null) {
-              logger.error("Unable to authenticate player", throwable);
-              inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
-              return;
-            }
-
-            // Go ahead and enable encryption. Once the client sends EncryptionResponse, encryption
-            // is enabled.
-            try {
-              mcConnection.enableEncryption(decryptedSharedSecret);
-            } catch (GeneralSecurityException e) {
-              logger.error("Unable to enable encryption for connection", e);
-              // At this point, the connection is encrypted, but something's wrong on our side and
-              // we can't do anything about it.
-              mcConnection.close(true);
-              return;
-            }
-
-            if (response.statusCode() == 200) {
-              final GameProfile profile = GENERAL_GSON.fromJson(response.body(),
-                  GameProfile.class);
-              // Not so fast, now we verify the public key for 1.19.1+
-              if (inbound.getIdentifiedKey() != null
-                  && inbound.getIdentifiedKey().getKeyRevision() == IdentifiedKey.Revision.LINKED_V2
-                  && inbound.getIdentifiedKey() instanceof final IdentifiedKeyImpl key) {
-                if (!key.internalAddHolder(profile.getId())) {
-                  inbound.disconnect(
-                      Component.translatable("multiplayer.disconnect.invalid_public_key"));
-                }
-              }
-              // All went well, initialize the session.
-              mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
-                  new AuthSessionHandler(server, inbound, profile, true));
-            } else {
-              // Try LittleSkin authentication if Mojang authentication fails
-              String littleSkinUrl = String.format(LITTLESKIN_HASJOINED_URL,
-                  urlFormParameterEscaper().escape(login.getUsername()), serverId);
-              if (server.getConfiguration().shouldPreventClientProxyConnections()) {
-                littleSkinUrl += "&ip=" + urlFormParameterEscaper().escape(playerIp);
-              }
-
-              final HttpRequest littleSkinRequest = HttpRequest.newBuilder()
-                  .setHeader("User-Agent",
-                      server.getVersion().getName() + "/" + server.getVersion().getVersion())
-                  .uri(URI.create(littleSkinUrl))
-                  .build();
-
-              httpClient.sendAsync(littleSkinRequest, HttpResponse.BodyHandlers.ofString())
-                  .whenCompleteAsync((littleSkinResponse, littleSkinThrowable) -> {
-                    if (mcConnection.isClosed()) {
-                      return;
-                    }
-
-                    if (littleSkinThrowable != null) {
-                      logger.error("Unable to authenticate player with LittleSkin", littleSkinThrowable);
-                      inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
-                      return;
-                    }
-
-                    if (littleSkinResponse.statusCode() == 200) {
-                      final GameProfile profile = GENERAL_GSON.fromJson(littleSkinResponse.body(),
-                          GameProfile.class);
-                      // Verify key for 1.19.1+ even for LittleSkin
-                      if (inbound.getIdentifiedKey() != null
-                          && inbound.getIdentifiedKey().getKeyRevision() == IdentifiedKey.Revision.LINKED_V2
-                          && inbound.getIdentifiedKey() instanceof final IdentifiedKeyImpl key) {
-                        if (!key.internalAddHolder(profile.getId())) {
-                          inbound.disconnect(
-                              Component.translatable("multiplayer.disconnect.invalid_public_key"));
-                          return;
-                        }
-                      }
-                      // LittleSkin authentication successful
-                      mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
-                          new AuthSessionHandler(server, inbound, profile, true));
-                    } else if (littleSkinResponse.statusCode() == 204) {
-                      // Offline mode user tried to connect to online mode server
-                      inbound.disconnect(
-                          Component.translatable("velocity.error.online-mode-only", NamedTextColor.RED));
-                    } else {
-                      // Both Mojang and LittleSkin authentication failed
-                      logger.error(
-                          "Authentication failed for {} ({}) - Mojang: {}, LittleSkin: {}",
-                          login.getUsername(), playerIp, response.statusCode(), 
-                          littleSkinResponse.statusCode());
-                      inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
-                    }
-                  }, mcConnection.eventLoop());
-            }
-          }, mcConnection.eventLoop())
-          .thenRun(() -> {
-            if (httpClient instanceof final AutoCloseable closeable) {
-              try {
-                closeable.close();
-              } catch (Exception e) {
-                // In Java 21, the HttpClient does not throw any Exception
-                // when trying to clean its resources, so this should not happen
-                logger.error("An unknown error occurred while trying to close an HttpClient", e);
-              }
-            }
-          });
+      authenticateWithMojang(url, serverId, login.getUsername());
     } catch (GeneralSecurityException e) {
       logger.error("Unable to enable encryption", e);
       mcConnection.close(true);
     }
     return true;
+  }
+
+  private void authenticateWithMojang(String url, String serverId, String username) {
+    server.getAsyncExecutor().execute(() -> {
+      try {
+        final HttpRequest httpRequest = HttpRequest.newBuilder()
+                .setHeader("User-Agent",
+                        server.getVersion().getName() + "/" + server.getVersion().getVersion())
+                .uri(URI.create(url))
+                .build();
+        final HttpClient httpClient = server.createHttpClient();
+        httpClient.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString())
+            .whenCompleteAsync((response, throwable) -> {
+              if (mcConnection.isClosed()) {
+                // The player disconnected after we authenticated them.
+                return;
+              }
+
+              if (throwable != null) {
+                logger.error("Unable to authenticate player", throwable);
+                inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
+                return;
+              }
+
+              if (response.statusCode() == 200) {
+                final GameProfile profile = GENERAL_GSON.fromJson(response.body(),
+                    GameProfile.class);
+                // Not so fast, now we verify the public key for 1.19.1+
+                if (inbound.getIdentifiedKey() != null
+                    && inbound.getIdentifiedKey().getKeyRevision() == IdentifiedKey.Revision.LINKED_V2
+                    && inbound.getIdentifiedKey() instanceof final IdentifiedKeyImpl key) {
+                  if (!key.internalAddHolder(profile.getId())) {
+                    inbound.disconnect(
+                        Component.translatable("multiplayer.disconnect.invalid_public_key"));
+                  }
+                }
+                // All went well, initialize the session.
+                mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
+                    new AuthSessionHandler(server, inbound, profile, true));
+              } else if (server.getConfiguration().isLittleSkinAuthEnabled()) {
+                // Check whitelist before trying LittleSkin
+                if (!server.getConfiguration().isPlayerInLittleSkinWhitelist(username)) {
+                  logger.info("Player {} not in LittleSkin whitelist, denying login", username);
+                  inbound.disconnect(Component.text(
+                          "抱歉，该用户不允许离线登录，请联系管理员",
+                          NamedTextColor.RED));
+                  return;
+                }
+                // Mojang authentication failed, try LittleSkin
+                String littleSkinUrl = String.format(LITTLESKIN_HASJOINED_URL,
+                    urlFormParameterEscaper().escape(username), serverId);
+                if (server.getConfiguration().shouldPreventClientProxyConnections()) {
+                  littleSkinUrl += "&ip=" + urlFormParameterEscaper().escape(
+                      ((InetSocketAddress) mcConnection.getRemoteAddress()).getHostString());
+                }
+                authenticateWithLittleSkin(littleSkinUrl, serverId, username);
+              } else {
+                // Both Mojang and LittleSkin authentication failed
+                logger.error(
+                    "Authentication failed for {} ({}) - Mojang: {}, LittleSkin disabled",
+                    login.getUsername(), ((InetSocketAddress) mcConnection.getRemoteAddress()).getHostString(),
+                    response.statusCode());
+                inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
+              }
+            }, mcConnection.eventLoop())
+            .thenRun(() -> {
+              if (httpClient instanceof final AutoCloseable closeable) {
+                try {
+                  closeable.close();
+                } catch (Exception e) {
+                  logger.error("An unknown error occurred while trying to close an HttpClient", e);
+                }
+              }
+            });
+      } catch (GeneralSecurityException e) {
+        logger.error("Unable to enable encryption", e);
+        mcConnection.close(true);
+      }
+    });
+  }
+
+  private void authenticateWithLittleSkin(String url, String serverId, String username) {
+    server.getAsyncExecutor().execute(() -> {
+      try {
+        final HttpRequest httpRequest = HttpRequest.newBuilder()
+                .setHeader("User-Agent",
+                        server.getVersion().getName() + "/" + server.getVersion().getVersion())
+                .uri(URI.create(url))
+                .build();
+        final HttpClient httpClient = server.createHttpClient();
+        httpClient.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString())
+            .whenCompleteAsync((response, throwable) -> {
+              if (mcConnection.isClosed()) {
+                // The player disconnected after we authenticated them.
+                return;
+              }
+
+              if (throwable != null) {
+                logger.error("Unable to authenticate player with LittleSkin", throwable);
+                inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
+                return;
+              }
+
+              if (response.statusCode() == 200) {
+                final GameProfile profile = GENERAL_GSON.fromJson(response.body(),
+                    GameProfile.class);
+                // Verify key for 1.19.1+ even for LittleSkin
+                if (inbound.getIdentifiedKey() != null
+                    && inbound.getIdentifiedKey().getKeyRevision() == IdentifiedKey.Revision.LINKED_V2
+                    && inbound.getIdentifiedKey() instanceof final IdentifiedKeyImpl key) {
+                  if (!key.internalAddHolder(profile.getId())) {
+                    inbound.disconnect(
+                        Component.translatable("multiplayer.disconnect.invalid_public_key"));
+                    return;
+                  }
+                }
+                // LittleSkin authentication successful
+                mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
+                    new AuthSessionHandler(server, inbound, profile, true));
+              } else if (response.statusCode() == 204) {
+                // Offline mode user tried to connect to online mode server
+                inbound.disconnect(
+                    Component.translatable("velocity.error.online-mode-only", NamedTextColor.RED));
+              } else {
+                // Both Mojang and LittleSkin authentication failed
+                logger.error(
+                    "Authentication failed for {} ({}) - Mojang: {}, LittleSkin: {}",
+                    login.getUsername(), ((InetSocketAddress) mcConnection.getRemoteAddress()).getHostString(),
+                    0, response.statusCode());
+                inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
+              }
+            }, mcConnection.eventLoop())
+            .thenRun(() -> {
+              if (httpClient instanceof final AutoCloseable closeable) {
+                try {
+                  closeable.close();
+                } catch (Exception e) {
+                  logger.error("An unknown error occurred while trying to close an HttpClient", e);
+                }
+              }
+            });
+      } catch (GeneralSecurityException e) {
+        logger.error("Unable to enable encryption", e);
+        mcConnection.close(true);
+      }
+    });
   }
 
   private EncryptionRequestPacket generateEncryptionRequest() {

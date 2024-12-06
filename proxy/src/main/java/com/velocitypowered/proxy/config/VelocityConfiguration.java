@@ -91,6 +91,10 @@ public class VelocityConfiguration implements ProxyConfig {
   private @Nullable Favicon favicon;
   @Expose
   private boolean forceKeyAuthentication = true; // Added in 1.19
+  @Expose
+  private boolean enableLittleSkinAuth = true;
+  @Expose
+  private List<String> littleSkinWhitelist = ImmutableList.of();
 
   private VelocityConfiguration(Servers servers, ForcedHosts forcedHosts, Advanced advanced,
       Query query, Metrics metrics) {
@@ -106,7 +110,8 @@ public class VelocityConfiguration implements ProxyConfig {
       PlayerInfoForwarding playerInfoForwardingMode, byte[] forwardingSecret,
       boolean onlineModeKickExistingPlayers, PingPassthroughMode pingPassthrough,
       boolean enablePlayerAddressLogging, Servers servers, ForcedHosts forcedHosts,
-      Advanced advanced, Query query, Metrics metrics, boolean forceKeyAuthentication) {
+      Advanced advanced, Query query, Metrics metrics, boolean forceKeyAuthentication,
+      boolean enableLittleSkinAuth, List<String> littleSkinWhitelist) {
     this.bind = bind;
     this.motd = motd;
     this.showMaxPlayers = showMaxPlayers;
@@ -124,6 +129,8 @@ public class VelocityConfiguration implements ProxyConfig {
     this.query = query;
     this.metrics = metrics;
     this.forceKeyAuthentication = forceKeyAuthentication;
+    this.enableLittleSkinAuth = enableLittleSkinAuth;
+    this.littleSkinWhitelist = ImmutableList.copyOf(littleSkinWhitelist);
   }
 
   /**
@@ -407,6 +414,14 @@ public class VelocityConfiguration implements ProxyConfig {
     return forceKeyAuthentication;
   }
 
+  public boolean isLittleSkinAuthEnabled() {
+    return enableLittleSkinAuth;
+  }
+
+  public boolean isPlayerInLittleSkinWhitelist(String username) {
+    return littleSkinWhitelist.isEmpty() || littleSkinWhitelist.contains(username);
+  }
+
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
@@ -424,6 +439,8 @@ public class VelocityConfiguration implements ProxyConfig {
         .add("favicon", favicon)
         .add("enablePlayerAddressLogging", enablePlayerAddressLogging)
         .add("forceKeyAuthentication", forceKeyAuthentication)
+        .add("enableLittleSkinAuth", enableLittleSkinAuth)
+        .add("littleSkinWhitelist", littleSkinWhitelist)
         .toString();
   }
 
@@ -513,6 +530,9 @@ public class VelocityConfiguration implements ProxyConfig {
       final boolean kickExisting = config.getOrElse("kick-existing-players", false);
       final boolean enablePlayerAddressLogging = config.getOrElse(
               "enable-player-address-logging", true);
+      final boolean enableLittleSkinAuth = config.getOrElse("authentication.enable-littleskin", true);
+      final List<String> littleSkinWhitelist = ImmutableList.copyOf(
+              config.getOrElse("authentication.littleskin-whitelist", ImmutableList.of()));
 
       // Throw an exception if the forwarding-secret file is empty and the proxy is using a
       // forwarding mode that requires it.
@@ -539,8 +559,9 @@ public class VelocityConfiguration implements ProxyConfig {
               new Advanced(advancedConfig),
               new Query(queryConfig),
               new Metrics(metricsConfig),
-              forceKeyAuthentication
-      );
+              forceKeyAuthentication,
+              enableLittleSkinAuth,
+              littleSkinWhitelist);
     }
   }
 
