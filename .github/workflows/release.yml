@@ -63,25 +63,8 @@ jobs:
           body: |
             Velocity Release ${{ steps.get_version.outputs.version }}
             
-            ### Changes in this release
-            - Added LittleSkin authentication support
-            - Other improvements and bug fixes
-            
-            ### Installation
-            1. Download the jar file
-            2. Replace your existing Velocity jar with the new one
-            3. Restart your server
-            
-            ### Note
-            Make sure to backup your configuration before updating.
-            
-            ### 新特性
-            - 添加 LittleSkin 验证支持
-            - 优化正版验证流程
-            
-            ### 改进
-            - 改进了验证失败时的错误提示
-            - 添加了更详细的日志记录
+            ### 更新日志
+            - 更新了玩家是否使用littleskin登录的接口
             
             ### 安装说明
             1. 下载 velocity-proxy-xxx-all.jar 文件
