@@ -193,7 +193,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
 
   ConnectedPlayer(VelocityServer server, GameProfile profile, MinecraftConnection connection,
                   @Nullable InetSocketAddress virtualHost, @Nullable String rawVirtualHost, boolean onlineMode,
-                  @Nullable IdentifiedKey playerKey) {
+                  @Nullable IdentifiedKey playerKey, boolean isLittleSkinAuthentication) {
     this.server = server;
     this.profile = profile;
     this.connection = connection;
@@ -202,6 +202,8 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     this.permissionFunction = PermissionFunction.ALWAYS_UNDEFINED;
     this.connectionPhase = connection.getType().getInitialClientPhase();
     this.onlineMode = onlineMode;
+    this.playerKey = playerKey;
+    this.isLittleSkinAuthentication = isLittleSkinAuthentication;
 
     if (connection.getProtocolVersion().noLessThan(ProtocolVersion.MINECRAFT_1_19_3)) {
       this.tabList = new VelocityTabList(this);
@@ -210,7 +212,6 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     } else {
       this.tabList = new VelocityTabListLegacy(this, server);
     }
-    this.playerKey = playerKey;
     this.chatQueue = new ChatQueue(this);
     this.chatBuilderFactory = new ChatBuilderFactory(this.getProtocolVersion());
     this.resourcePackHandler = ResourcePackHandler.create(this, server);
@@ -728,14 +729,6 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
                                          boolean safe) {
     if (!isActive()) {
       // If the connection is no longer active, it makes no sense to try and recover it.
-      return;
-    }
-
-    if (!safe) {
-      // /!\ IT IS UNSAFE TO CONTINUE /!\
-      //
-      // This is usually triggered by a failed Forge handshake.
-      disconnect(friendlyReason);
       return;
     }
 

@@ -68,14 +68,16 @@ public class AuthSessionHandler implements MinecraftSessionHandler {
   private GameProfile profile;
   private @MonotonicNonNull ConnectedPlayer connectedPlayer;
   private final boolean onlineMode;
+  private final boolean isLittleSkinAuthentication;
   private State loginState = State.START; // 1.20.2+
 
   AuthSessionHandler(VelocityServer server, LoginInboundConnection inbound,
-      GameProfile profile, boolean onlineMode) {
+      GameProfile profile, boolean onlineMode, boolean isLittleSkinAuthentication) {
     this.server = Preconditions.checkNotNull(server, "server");
     this.inbound = Preconditions.checkNotNull(inbound, "inbound");
     this.profile = Preconditions.checkNotNull(profile, "profile");
     this.onlineMode = onlineMode;
+    this.isLittleSkinAuthentication = isLittleSkinAuthentication;
     this.mcConnection = inbound.delegatedConnection();
   }
 
@@ -97,7 +99,7 @@ public class AuthSessionHandler implements MinecraftSessionHandler {
       // Initiate a regular connection and move over to it.
       ConnectedPlayer player = new ConnectedPlayer(server, profileEvent.getGameProfile(),
           mcConnection, inbound.getVirtualHost().orElse(null), inbound.getRawVirtualHost().orElse(null), onlineMode,
-          inbound.getIdentifiedKey());
+          inbound.getIdentifiedKey(), isLittleSkinAuthentication);
       this.connectedPlayer = player;
       if (!server.canRegisterConnection(player)) {
         player.disconnect0(

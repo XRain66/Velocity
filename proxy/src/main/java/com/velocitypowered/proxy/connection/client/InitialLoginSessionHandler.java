@@ -300,7 +300,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
                       }
                       // LittleSkin authentication successful
                       mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
-                          new AuthSessionHandler(server, inbound, profile, true));
+                          new AuthSessionHandler(server, inbound, profile, true, true));
                     } else if (littleSkinResponse.statusCode() == 204) {
                       // Offline mode user tried to connect to online mode server
                       inbound.disconnect(
