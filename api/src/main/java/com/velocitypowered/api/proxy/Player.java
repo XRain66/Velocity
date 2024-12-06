@@ -476,9 +476,16 @@ public interface Player extends
   void setServerLinks(@NotNull List<ServerLink> links);
 
   /**
-   * Gets whether the player was authenticated using LittleSkin.
+   * Returns whether the player was authenticated using LittleSkin.
    *
    * @return true if the player was authenticated using LittleSkin, false otherwise
    */
   boolean isLittleSkinAuthenticated();
+
+  /**
+   * Returns the LittleSkin authentication token.
+   *
+   * @return the LittleSkin token, or null if not authenticated
+   */
+  @Nullable String getLittleSkinToken();
 }

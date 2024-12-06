@@ -18,6 +18,11 @@
 package com.velocitypowered.proxy.connection.client;
 
 import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.ALREADY_CONNECTED;
+import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.CONNECTION_CANCELLED;
+import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.CONNECTION_IN_PROGRESS;
+import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.SERVER_DISCONNECTED;
+import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.SUCCESS;
+import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.plainResult;
 import static com.velocitypowered.proxy.connection.util.ConnectionRequestResults.plainResult;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.completedFuture;
@@ -140,11 +145,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jetbrains.annotations.NotNull;
 
-import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.ALREADY_CONNECTED;
-import static com.velocitypowered.proxy.connection.util.ConnectionRequestResults.plainResult;
-import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.CompletableFuture.completedFuture;
-
 /**
  * Represents a player that is connected to the proxy.
  */
@@ -195,7 +195,8 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   /**
    * Whether this player was authenticated using LittleSkin.
    */
-  private final boolean isLittleSkinAuthentication;
+  private boolean isLittleSkinAuthentication = false;
+  private String littleSkinToken = null;
 
   /**
    * Constructs a new connected player.
@@ -1027,6 +1028,21 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   }
 
   @Override
+  public boolean isLittleSkinAuthenticated() {
+    return isLittleSkinAuthentication;
+  }
+
+  @Override
+  public String getLittleSkinToken() {
+    return littleSkinToken;
+  }
+
+  public void setLittleSkinAuthentication(boolean isAuthenticated, String token) {
+    this.isLittleSkinAuthentication = isAuthenticated;
+    this.littleSkinToken = token;
+  }
+
+  @Override
   public void transferToHost(final InetSocketAddress address) {
     Preconditions.checkNotNull(address);
     Preconditions.checkArgument(
@@ -1467,8 +1483,4 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     }
   }
 
-  @Override
-  public boolean isLittleSkinAuthenticated() {
-    return isLittleSkinAuthentication;
-  }
 }
