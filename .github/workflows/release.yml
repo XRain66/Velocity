@@ -1,0 +1,83 @@
+name: Release Velocity
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+          
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+        
+      - name: Build with Gradle
+        run: ./gradlew build
+        
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.version }}
+          tag_name: v${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            proxy/build/libs/*.jar
+            !proxy/build/libs/*-sources.jar
+            !proxy/build/libs/*-javadoc.jar
+            !proxy/build/libs/*-all.jar
+          body: |
+            Velocity Release ${{ steps.get_version.outputs.version }}
+            
+            ### Changes in this release
+            - Added LittleSkin authentication support
+            - Other improvements and bug fixes
+            
+            ### Installation
+            1. Download the jar file
+            2. Replace your existing Velocity jar with the new one
+            3. Restart your server
+            
+            ### Note
+            Make sure to backup your configuration before updating.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Velocity-${{ steps.get_version.outputs.version }}
+          path: |
+            proxy/build/libs/*.jar
+            !proxy/build/libs/*-sources.jar
+            !proxy/build/libs/*-javadoc.jar
+            !proxy/build/libs/*-all.jar
+          if-no-files-found: error
