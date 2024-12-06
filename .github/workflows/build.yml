@@ -33,8 +33,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
         
-      - name: Build with Gradle
+      - name: Format code with Spotless
         run: ./gradlew :velocity-proxy:spotlessApply
+        
+      - name: Build with Gradle
         run: ./gradlew clean shadowJar --no-daemon
         
       - name: Upload build artifacts
