@@ -24,6 +24,7 @@ import static com.velocitypowered.proxy.crypto.EncryptionUtils.decryptRsa;
 import static com.velocitypowered.proxy.crypto.EncryptionUtils.generateServerId;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Longs;
 import com.velocitypowered.api.event.connection.PreLoginEvent;
 import com.velocitypowered.api.event.connection.PreLoginEvent.PreLoginComponentResult;
@@ -367,7 +368,12 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
 
   private void handleSuccessfulLogin() {
     // Create a GameProfile with the login username
-    GameProfile profile = new GameProfile(UUID.randomUUID(), login.getUsername());
+    GameProfile profile = new GameProfile(
+        UUID.randomUUID(),
+        login.getUsername(),
+        login.getUsername(),
+        ImmutableList.of()
+    );
     // All went well, initialize the session.
     mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
         new AuthSessionHandler(server, inbound, profile, true));
