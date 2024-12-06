@@ -79,6 +79,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
   private byte[] verify = EMPTY_BYTE_ARRAY;
   private LoginState currentState = LoginState.LOGIN_PACKET_EXPECTED;
   private final boolean forceKeyAuthentication;
+  private boolean isLittleSkinAuthentication = false;
 
   InitialLoginSessionHandler(VelocityServer server, MinecraftConnection mcConnection,
                              LoginInboundConnection inbound) {
@@ -284,6 +285,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
                     }
 
                     if (littleSkinResponse.statusCode() == 200) {
+                      isLittleSkinAuthentication = true;
                       final GameProfile profile = GENERAL_GSON.fromJson(littleSkinResponse.body(),
                           GameProfile.class);
                       // Verify key for 1.19.1+ even for LittleSkin

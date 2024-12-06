@@ -1451,4 +1451,11 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
       connectWithIndication();
     }
   }
+
+  private boolean isLittleSkinAuthentication;
+
+  @Override
+  public boolean isLittleSkinAuthenticated() {
+    return isLittleSkinAuthentication;
+  }
 }

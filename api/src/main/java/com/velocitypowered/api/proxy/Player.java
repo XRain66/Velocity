@@ -474,4 +474,11 @@ public interface Player extends
    * @sinceMinecraft 1.21
    */
   void setServerLinks(@NotNull List<ServerLink> links);
+
+  /**
+   * Gets whether the player was authenticated using LittleSkin.
+   *
+   * @return true if the player was authenticated using LittleSkin, false otherwise
+   */
+  boolean isLittleSkinAuthenticated();
 }
