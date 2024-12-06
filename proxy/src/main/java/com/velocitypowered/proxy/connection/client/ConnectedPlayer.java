@@ -17,13 +17,7 @@
 
 package com.velocitypowered.proxy.connection.client;
 
-import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.ALREADY_CONNECTED;
-import static com.velocitypowered.proxy.connection.util.ConnectionRequestResults.plainResult;
-import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.CompletableFuture.completedFuture;
-
 import com.google.common.base.Preconditions;
-import com.google.gson.JsonObject;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.DisconnectEvent.LoginStatus;
 import com.velocitypowered.api.event.connection.PreTransferEvent;
@@ -53,9 +47,10 @@ import com.velocitypowered.api.proxy.messages.PluginMessageEncoder;
 import com.velocitypowered.api.proxy.player.PlayerSettings;
 import com.velocitypowered.api.proxy.player.ResourcePackInfo;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
+import com.velocitypowered.api.proxy.server.ServerLink;
 import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.api.util.ModInfo;
-import com.velocitypowered.api.util.ServerLink;
+import com.velocitypowered.api.util.ModInfo;
 import com.velocitypowered.proxy.VelocityServer;
 import com.velocitypowered.proxy.adventure.VelocityBossBarImplementation;
 import com.velocitypowered.proxy.connection.MinecraftConnection;
@@ -85,7 +80,6 @@ import com.velocitypowered.proxy.protocol.packet.chat.ComponentHolder;
 import com.velocitypowered.proxy.protocol.packet.chat.PlayerChatCompletionPacket;
 import com.velocitypowered.proxy.protocol.packet.chat.builder.ChatBuilderFactory;
 import com.velocitypowered.proxy.protocol.packet.chat.builder.ChatBuilderV2;
-import com.velocitypowered.proxy.protocol.packet.chat.legacy.LegacyChatPacket;
 import com.velocitypowered.proxy.protocol.packet.config.ClientboundServerLinksPacket;
 import com.velocitypowered.proxy.protocol.packet.config.StartUpdatePacket;
 import com.velocitypowered.proxy.protocol.packet.title.GenericTitlePacket;
@@ -103,7 +97,6 @@ import io.netty.buffer.Unpooled;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -129,6 +122,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.logger.slf4j.ComponentLogger;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import net.kyori.adventure.title.Title;
 import net.kyori.adventure.title.Title.Times;
 import net.kyori.adventure.title.TitlePart;
 import net.kyori.adventure.translation.GlobalTranslator;
@@ -184,6 +178,23 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   private final ChatQueue chatQueue;
   private final ChatBuilderFactory chatBuilderFactory;
 
+  /**
+   * Whether this player was authenticated using LittleSkin.
+   */
+  private final boolean isLittleSkinAuthentication;
+
+  /**
+   * Constructs a new connected player.
+   *
+   * @param server the Velocity server instance
+   * @param profile the player's game profile
+   * @param connection the player's connection
+   * @param virtualHost the virtual host that the player connected to
+   * @param rawVirtualHost the raw virtual host address that the player connected to
+   * @param onlineMode whether the player is in online mode
+   * @param playerKey the player's identified key
+   * @param isLittleSkinAuthentication whether the player was authenticated using LittleSkin
+   */
   public ConnectedPlayer(VelocityServer server, GameProfile profile,
       MinecraftConnection connection, @Nullable InetSocketAddress virtualHost,
       @Nullable String rawVirtualHost, boolean onlineMode,
@@ -1349,7 +1360,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
       }
       if (connectedServer != null
           && connectedServer.getServer().getServerInfo().equals(server.getServerInfo())) {
-        return Optional.of(ALREADY_CONNECTED);
+        return Optional.of(ConnectionRequestBuilder.Status.ALREADY_CONNECTED);
       }
       return Optional.empty();
     }
@@ -1440,8 +1451,6 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
       connectWithIndication();
     }
   }
-
-  private boolean isLittleSkinAuthentication;
 
   @Override
   public boolean isLittleSkinAuthenticated() {
