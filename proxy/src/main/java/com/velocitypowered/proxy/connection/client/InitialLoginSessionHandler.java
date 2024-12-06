@@ -230,7 +230,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
   }
 
   private void authenticateWithMojang(String url, String serverId, String username) {
-    server.getAsyncExecutor().execute(() -> {
+    server.getScheduler().buildTask(this, () -> {
       try {
         final HttpRequest httpRequest = HttpRequest.newBuilder()
                 .setHeader("User-Agent",
@@ -264,8 +264,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
                   }
                 }
                 // All went well, initialize the session.
-                mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
-                    new AuthSessionHandler(server, inbound, profile, true));
+                handleAuthenticationSucceeded(profile, true);
               } else if (server.getConfiguration().isLittleSkinAuthEnabled()) {
                 // Check whitelist before trying LittleSkin
                 if (!server.getConfiguration().isPlayerInLittleSkinWhitelist(username)) {
@@ -305,11 +304,11 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
         logger.error("Unable to enable encryption", e);
         mcConnection.close(true);
       }
-    });
+    }).schedule();
   }
 
   private void authenticateWithLittleSkin(String url, String serverId, String username) {
-    server.getAsyncExecutor().execute(() -> {
+    server.getScheduler().buildTask(this, () -> {
       try {
         final HttpRequest httpRequest = HttpRequest.newBuilder()
                 .setHeader("User-Agent",
@@ -333,29 +332,13 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
               if (response.statusCode() == 200) {
                 final GameProfile profile = GENERAL_GSON.fromJson(response.body(),
                     GameProfile.class);
-                // Verify key for 1.19.1+ even for LittleSkin
-                if (inbound.getIdentifiedKey() != null
-                    && inbound.getIdentifiedKey().getKeyRevision() == IdentifiedKey.Revision.LINKED_V2
-                    && inbound.getIdentifiedKey() instanceof final IdentifiedKeyImpl key) {
-                  if (!key.internalAddHolder(profile.getId())) {
-                    inbound.disconnect(
-                        Component.translatable("multiplayer.disconnect.invalid_public_key"));
-                    return;
-                  }
-                }
-                // LittleSkin authentication successful
-                mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
-                    new AuthSessionHandler(server, inbound, profile, true));
-              } else if (response.statusCode() == 204) {
-                // Offline mode user tried to connect to online mode server
-                inbound.disconnect(
-                    Component.translatable("velocity.error.online-mode-only", NamedTextColor.RED));
+                // All went well, initialize the session.
+                handleAuthenticationSucceeded(profile, false);
               } else {
-                // Both Mojang and LittleSkin authentication failed
                 logger.error(
-                    "Authentication failed for {} ({}) - Mojang: {}, LittleSkin: {}",
+                    "Authentication failed for {} ({}) - LittleSkin: {}",
                     login.getUsername(), ((InetSocketAddress) mcConnection.getRemoteAddress()).getHostString(),
-                    0, response.statusCode());
+                    response.statusCode());
                 inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
               }
             }, mcConnection.eventLoop())
@@ -372,7 +355,13 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
         logger.error("Unable to enable encryption", e);
         mcConnection.close(true);
       }
-    });
+    }).schedule();
+  }
+
+  private void handleAuthenticationSucceeded(GameProfile profile, boolean mojangAuth) {
+    // All went well, initialize the session.
+    mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
+        new AuthSessionHandler(server, inbound, profile, mojangAuth));
   }
 
   private EncryptionRequestPacket generateEncryptionRequest() {
