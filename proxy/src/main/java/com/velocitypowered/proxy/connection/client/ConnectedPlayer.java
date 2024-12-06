@@ -18,6 +18,7 @@
 package com.velocitypowered.proxy.connection.client;
 
 import com.google.common.base.Preconditions;
+import com.google.gson.JsonObject;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.DisconnectEvent.LoginStatus;
 import com.velocitypowered.api.event.connection.PreTransferEvent;
@@ -59,7 +60,7 @@ import com.velocitypowered.proxy.connection.player.bundle.BundleDelimiterHandler
 import com.velocitypowered.proxy.connection.player.resourcepack.VelocityResourcePackInfo;
 import com.velocitypowered.proxy.connection.player.resourcepack.handler.ResourcePackHandler;
 import com.velocitypowered.proxy.connection.util.ConnectionMessages;
-import com.velocitypowered.proxy.connection.util.ConnectionRequestResults.Impl;
+import com.velocitypowered.proxy.connection.util.ConnectionRequestResults;
 import com.velocitypowered.proxy.connection.util.VelocityInboundConnection;
 import com.velocitypowered.proxy.protocol.StateRegistry;
 import com.velocitypowered.proxy.protocol.netty.MinecraftEncoder;
@@ -79,6 +80,7 @@ import com.velocitypowered.proxy.protocol.packet.chat.ComponentHolder;
 import com.velocitypowered.proxy.protocol.packet.chat.PlayerChatCompletionPacket;
 import com.velocitypowered.proxy.protocol.packet.chat.builder.ChatBuilderFactory;
 import com.velocitypowered.proxy.protocol.packet.chat.builder.ChatBuilderV2;
+import com.velocitypowered.proxy.protocol.packet.chat.legacy.LegacyChatPacket;
 import com.velocitypowered.proxy.protocol.packet.config.ClientboundServerLinksPacket;
 import com.velocitypowered.proxy.protocol.packet.config.StartUpdatePacket;
 import com.velocitypowered.proxy.protocol.packet.title.GenericTitlePacket;
@@ -96,6 +98,7 @@ import io.netty.buffer.Unpooled;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -129,6 +132,11 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jetbrains.annotations.NotNull;
+
+import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.ALREADY_CONNECTED;
+import static com.velocitypowered.proxy.connection.util.ConnectionRequestResults.plainResult;
+import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 
 /**
  * Represents a player that is connected to the proxy.
@@ -805,7 +813,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
                       .orElse(ConnectionMessages.INTERNAL_SERVER_CONNECTION_ERROR);
                   handleConnectionException(res.getServer(),
                       DisconnectPacket.create(reason, getProtocolVersion(), connection.getState()),
-                      ((Impl) status).isSafe());
+                      ((ConnectionRequestResults.Impl) status).isSafe());
                   break;
                 case SUCCESS:
                   Component requestedMessage = res.getMessageComponent();
@@ -1368,10 +1376,10 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
       return CompletableFuture.supplyAsync(() -> checkServer(toConnect), connection.eventLoop());
     }
 
-    private CompletableFuture<Impl> internalConnect() {
+    private CompletableFuture<ConnectionRequestResults.Impl> internalConnect() {
       return this.getInitialStatus().thenCompose(initialCheck -> {
         if (initialCheck.isPresent()) {
-          return completedFuture(plainResult(initialCheck.get(), toConnect));
+          return completedFuture(ConnectionRequestResults.plainResult(initialCheck.get(), toConnect));
         }
 
         ServerPreConnectEvent event =
@@ -1380,13 +1388,13 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
           Optional<RegisteredServer> newDest = newEvent.getResult().getServer();
           if (newDest.isEmpty()) {
             return completedFuture(
-                plainResult(ConnectionRequestBuilder.Status.CONNECTION_CANCELLED, toConnect));
+                ConnectionRequestResults.plainResult(ConnectionRequestBuilder.Status.CONNECTION_CANCELLED, toConnect));
           }
 
           RegisteredServer realDestination = newDest.get();
           Optional<ConnectionRequestBuilder.Status> check = checkServer(realDestination);
           if (check.isPresent()) {
-            return completedFuture(plainResult(check.get(), realDestination));
+            return completedFuture(ConnectionRequestResults.plainResult(check.get(), realDestination));
           }
 
           VelocityRegisteredServer vrs = (VelocityRegisteredServer) realDestination;
@@ -1427,6 +1435,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
         }
 
         switch (status.getStatus()) {
+          // Impossible/nonsensical cases
           case ALREADY_CONNECTED -> sendMessage(ConnectionMessages.ALREADY_CONNECTED);
           case CONNECTION_IN_PROGRESS -> sendMessage(ConnectionMessages.IN_PROGRESS);
           case CONNECTION_CANCELLED -> {
