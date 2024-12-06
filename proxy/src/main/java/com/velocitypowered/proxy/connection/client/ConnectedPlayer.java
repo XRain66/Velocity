@@ -22,7 +22,6 @@ import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.CONN
 import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.CONNECTION_IN_PROGRESS;
 import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.SERVER_DISCONNECTED;
 import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.SUCCESS;
-import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.plainResult;
 import static com.velocitypowered.proxy.connection.util.ConnectionRequestResults.plainResult;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.completedFuture;
