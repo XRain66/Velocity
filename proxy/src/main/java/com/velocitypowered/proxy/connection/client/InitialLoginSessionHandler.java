@@ -364,6 +364,12 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
         new AuthSessionHandler(server, inbound, profile, mojangAuth));
   }
 
+  private void handleSuccessfulLogin() {
+    // All went well, initialize the session.
+    mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
+        new AuthSessionHandler(server, inbound, login.getGameProfile(), true));
+  }
+
   private EncryptionRequestPacket generateEncryptionRequest() {
     byte[] verify = new byte[4];
     ThreadLocalRandom.current().nextBytes(verify);

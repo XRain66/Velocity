@@ -26,7 +26,7 @@ import java.util.List;
 /**
  * Creation of the configuration options for LittleSkin authentication.
  */
-public class LittleSkinAuthenticationMigration implements ConfigurationMigration {
+public final class LittleSkinAuthenticationMigration implements ConfigurationMigration {
 
   @Override
   public boolean shouldMigrate(final CommentedFileConfig config) {
