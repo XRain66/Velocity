@@ -126,16 +126,15 @@ public class LoginSessionHandler implements MinecraftSessionHandler {
       byte[] decryptedSharedSecret = decryptRsa(serverKeyPair, packet.getSharedSecret());
       String serverId = generateServerId(decryptedSharedSecret, serverKeyPair.getPublic());
 
-      String playerIp = ((InetSocketAddress) mcConnection.getRemoteAddress()).getHostString();
-      String mojangUrl = String.format(MOJANG_HASJOINED_URL,
-          urlFormParameterEscaper().escape(login.getUsername()), serverId);
-      String littleSkinUrl = String.format(LITTLESKIN_HASJOINED_URL,
-          urlFormParameterEscaper().escape(login.getUsername()), serverId);
-
-      if (server.getConfiguration().shouldPreventClientProxyConnections()) {
-        mojangUrl += "&ip=" + urlFormParameterEscaper().escape(playerIp);
-        littleSkinUrl += "&ip=" + urlFormParameterEscaper().escape(playerIp);
-      }
+      final String playerIp = ((InetSocketAddress) mcConnection.getRemoteAddress()).getHostString();
+      final String mojangUrl = String.format(MOJANG_HASJOINED_URL,
+          urlFormParameterEscaper().escape(login.getUsername()), serverId)
+          + (server.getConfiguration().shouldPreventClientProxyConnections() 
+          ? "&ip=" + urlFormParameterEscaper().escape(playerIp) : "");
+      final String littleSkinUrl = String.format(LITTLESKIN_HASJOINED_URL,
+          urlFormParameterEscaper().escape(login.getUsername()), serverId)
+          + (server.getConfiguration().shouldPreventClientProxyConnections() 
+          ? "&ip=" + urlFormParameterEscaper().escape(playerIp) : "");
 
       // First try Mojang authentication
       ListenableFuture<Response> hasJoinedResponse = server.getAsyncHttpClient().prepareGet(mojangUrl)
@@ -155,16 +154,17 @@ public class LoginSessionHandler implements MinecraftSessionHandler {
         }
 
         try {
-          Response profileResponse = hasJoinedResponse.get();
+          final Response profileResponse = hasJoinedResponse.get();
           if (profileResponse.getStatusCode() == 200) {
             // All went well with Mojang, initialize the session.
             initializePlayer(GENERAL_GSON.fromJson(profileResponse.getResponseBody(),
                 GameProfile.class), true);
           } else {
             // Mojang authentication failed, try LittleSkin
+            final String finalLittleSkinUrl = littleSkinUrl;
             ListenableFuture<Response> littleSkinResponse = server.getAsyncHttpClient()
-                .prepareGet(littleSkinUrl).execute();
-
+                .prepareGet(finalLittleSkinUrl).execute();
+            
             littleSkinResponse.addListener(() -> {
               try {
                 Response lsProfileResponse = littleSkinResponse.get();
