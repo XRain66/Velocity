@@ -22,6 +22,7 @@ import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.CONN
 import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.CONNECTION_IN_PROGRESS;
 import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.SERVER_DISCONNECTED;
 import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.SUCCESS;
+import static com.velocitypowered.api.proxy.ConnectionRequestBuilder.Status.CONNECTION_IN_PROGRESS;
 import static com.velocitypowered.proxy.connection.util.ConnectionRequestResults.plainResult;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.completedFuture;
@@ -117,7 +118,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import net.kyori.adventure.audience.MessageType;
 import net.kyori.adventure.bossbar.BossBar;
@@ -143,6 +147,8 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Represents a player that is connected to the proxy.
@@ -155,6 +161,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   static final PermissionProvider DEFAULT_PERMISSIONS = s -> PermissionFunction.ALWAYS_UNDEFINED;
 
   private static final ComponentLogger logger = ComponentLogger.logger(ConnectedPlayer.class);
+  private static final Logger packetLogger = LoggerFactory.getLogger("PacketMonitor");
 
   private final Identity identity;
   /**
@@ -196,6 +203,13 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
    */
   private boolean isLittleSkinAuthentication = false;
   private String littleSkinToken = null;
+
+  private static final ScheduledExecutorService packetMonitorExecutor = 
+      Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder()
+          .setNameFormat("Velocity-PacketMonitor-%d")
+          .setDaemon(true)
+          .build());
+  private ScheduledFuture<?> packetMonitorTask;
 
   /**
    * Constructs a new connected player.
@@ -1482,4 +1496,64 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     }
   }
 
+  public void startPacketMonitor() {
+    if (packetMonitorTask != null && !packetMonitorTask.isDone()) {
+      packetLogger.info("Packet monitor is already running for player {}", this.getUsername());
+      return;
+    }
+
+    packetMonitorTask = packetMonitorExecutor.scheduleAtFixedRate(() -> {
+      if (!this.isActive()) {
+        stopPacketMonitor();
+        return;
+      }
+
+      VelocityServerConnection server = this.connectedServer;
+      if (server == null) {
+        packetLogger.info("[PacketMonitor] Player {} is not connected to any server", this.getUsername());
+        return;
+      }
+
+      TabListEntry selfEntry = this.tabList.getEntry(this.getUniqueId()).orElse(null);
+      if (selfEntry == null) {
+        packetLogger.info("[PacketMonitor] Player {} has no tab list entry", this.getUsername());
+        return;
+      }
+
+      packetLogger.info("[PacketMonitor] Status for player {}:", this.getUsername());
+      packetLogger.info("  - Connected to server: {}", server.getServerInfo().getName());
+      packetLogger.info("  - Game mode: {}", getGameModeName(selfEntry.getGameMode()));
+      packetLogger.info("  - Latency: {}ms", selfEntry.getLatency());
+      packetLogger.info("  - Protocol version: {}", this.protocolVersion);
+      packetLogger.info("  - Active connection: {}", this.connection.isActive());
+      
+    }, 0, 5, TimeUnit.SECONDS);
+
+    packetLogger.info("Started packet monitor for player {}", this.getUsername());
+  }
+
+  public void stopPacketMonitor() {
+    if (packetMonitorTask != null) {
+      packetMonitorTask.cancel(false);
+      packetMonitorTask = null;
+      packetLogger.info("Stopped packet monitor for player {}", this.getUsername());
+    }
+  }
+
+  private String getGameModeName(int gameMode) {
+    switch (gameMode) {
+      case 0:
+        return "SURVIVAL";
+      case 1:
+        return "CREATIVE";
+      case 2:
+        return "ADVENTURE";
+      case 3:
+        return "SPECTATOR";
+      case -1:
+        return "NOT_SET";
+      default:
+        return "UNKNOWN(" + gameMode + ")";
+    }
+  }
 }

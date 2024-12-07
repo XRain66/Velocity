@@ -341,14 +341,19 @@ public class BackendPlaySessionHandler implements MinecraftSessionHandler {
 
   @Override
   public boolean handle(UpsertPlayerInfoPacket packet) {
-    logger.info("[GameMode Debug] Received UpsertPlayerInfoPacket with actions: {}", packet.getActions());
+    logger.info("[GameMode Debug] Received UpsertPlayerInfoPacket for player {} with actions: {}", 
+        serverConn.getPlayer().getUsername(),
+        packet.getActions());
+
     for (UpsertPlayerInfoPacket.Entry entry : packet.getEntries()) {
-      logger.info("[GameMode Debug] Entry for player {}: gameMode={}, actions={}, profile={}", 
-          entry.getProfile() != null ? entry.getProfile().getName() : "unknown",
-          entry.getGameMode(),
-          packet.getActions(),
-          entry.getProfile());
+      if (entry.getProfileId().equals(serverConn.getPlayer().getUniqueId())) {
+        logger.info("[GameMode Debug] Found entry for current player: gameMode={}, profile={}", 
+            getGameModeName(entry.getGameMode()),
+            entry.getProfile() != null ? entry.getProfile().getName() : "unknown");
+      }
     }
+
+    // 让 TabList 处理游戏模式更新
     serverConn.getPlayer().getTabList().processUpdate(packet);
     return false;
   }
@@ -452,9 +457,68 @@ public class BackendPlaySessionHandler implements MinecraftSessionHandler {
 
   @Override
   public boolean handle(JoinGamePacket packet) {
-    logger.info("[GameMode Debug] Received JoinGamePacket: gameMode={}, previousGameMode={}, isHardcore={}", 
-        packet.getGamemode(), packet.getPreviousGamemode(), packet.getIsHardcore());
+    logger.info("[GameMode Debug] Received JoinGamePacket for player {}: gameMode={}, previousGameMode={}, isHardcore={}", 
+        serverConn.getPlayer().getUsername(),
+        getGameModeName(packet.getGamemode()),
+        getGameModeName(packet.getPreviousGamemode()),
+        packet.getIsHardcore());
+
+    // Start packet monitoring
+    serverConn.getPlayer().startPacketMonitor();
+
+    // 确保同步游戏模式到 TabList
+    VelocityTabList tabList = (VelocityTabList) serverConn.getPlayer().getTabList();
+    java.util.Optional<TabListEntry> selfEntry = tabList.getEntry(serverConn.getPlayer().getUniqueId());
+    
+    if (selfEntry.isPresent()) {
+      VelocityTabListEntry entry = (VelocityTabListEntry) selfEntry.get();
+      if (entry.getGameMode() != packet.getGamemode()) {
+        logger.info("[GameMode Debug] Updating player {} gamemode in TabList from {} to {}", 
+            serverConn.getPlayer().getUsername(),
+            getGameModeName(entry.getGameMode()),
+            getGameModeName(packet.getGamemode()));
+        entry.setGameMode(packet.getGamemode());
+      }
+    } else {
+      logger.warn("[GameMode Debug] Could not find TabList entry for player {}", 
+          serverConn.getPlayer().getUsername());
+    }
+
     return false;
+  }
+
+  @Override
+  public void disconnected() {
+    // Stop packet monitoring when player disconnects
+    serverConn.getPlayer().stopPacketMonitor();
+    serverConn.getServer().removePlayer(serverConn.getPlayer());
+    if (!serverConn.isGracefulDisconnect() && !exceptionTriggered) {
+      if (server.getConfiguration().isFailoverOnUnexpectedServerDisconnect()) {
+        serverConn.getPlayer().handleConnectionException(serverConn.getServer(),
+            DisconnectPacket.create(ConnectionMessages.INTERNAL_SERVER_CONNECTION_ERROR,
+                serverConn.getPlayer().getProtocolVersion(),
+                    serverConn.getPlayer().getConnection().getState()), true);
+      } else {
+        serverConn.getPlayer().disconnect(ConnectionMessages.INTERNAL_SERVER_CONNECTION_ERROR);
+      }
+    }
+  }
+
+  private String getGameModeName(int gameMode) {
+    switch (gameMode) {
+      case 0:
+        return "SURVIVAL";
+      case 1:
+        return "CREATIVE";
+      case 2:
+        return "ADVENTURE";
+      case 3:
+        return "SPECTATOR";
+      case -1:
+        return "NOT_SET";
+      default:
+        return "UNKNOWN(" + gameMode + ")";
+    }
   }
 
   @Override
@@ -493,21 +557,6 @@ public class BackendPlaySessionHandler implements MinecraftSessionHandler {
 
   public VelocityServer getServer() {
     return server;
-  }
-
-  @Override
-  public void disconnected() {
-    serverConn.getServer().removePlayer(serverConn.getPlayer());
-    if (!serverConn.isGracefulDisconnect() && !exceptionTriggered) {
-      if (server.getConfiguration().isFailoverOnUnexpectedServerDisconnect()) {
-        serverConn.getPlayer().handleConnectionException(serverConn.getServer(),
-            DisconnectPacket.create(ConnectionMessages.INTERNAL_SERVER_CONNECTION_ERROR,
-                serverConn.getPlayer().getProtocolVersion(),
-                    serverConn.getPlayer().getConnection().getState()), true);
-      } else {
-        serverConn.getPlayer().disconnect(ConnectionMessages.INTERNAL_SERVER_CONNECTION_ERROR);
-      }
-    }
   }
 
   @Override
