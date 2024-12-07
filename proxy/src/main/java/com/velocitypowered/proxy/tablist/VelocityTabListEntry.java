@@ -25,7 +25,8 @@ import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.proxy.protocol.packet.UpsertPlayerInfoPacket;
 import com.velocitypowered.proxy.protocol.packet.chat.ComponentHolder;
 import java.util.Optional;
-import java.util.logging.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import net.kyori.adventure.text.Component;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -34,7 +35,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class VelocityTabListEntry implements TabListEntry {
 
-  private static final Logger logger = Logger.getLogger(VelocityTabListEntry.class);
+  private static final Logger logger = LogManager.getLogger(VelocityTabListEntry.class);
 
   private final VelocityTabList tabList;
   private final GameProfile profile;
