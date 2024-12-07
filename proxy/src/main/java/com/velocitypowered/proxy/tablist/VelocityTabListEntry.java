@@ -25,6 +25,7 @@ import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.proxy.protocol.packet.UpsertPlayerInfoPacket;
 import com.velocitypowered.proxy.protocol.packet.chat.ComponentHolder;
 import java.util.Optional;
+import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -32,6 +33,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Generic tab list entry implementation.
  */
 public class VelocityTabListEntry implements TabListEntry {
+
+  private static final Logger logger = Logger.getLogger(VelocityTabListEntry.class);
 
   private final VelocityTabList tabList;
   private final GameProfile profile;
@@ -121,6 +124,7 @@ public class VelocityTabListEntry implements TabListEntry {
 
   @Override
   public TabListEntry setGameMode(int gameMode) {
+    logger.info("[GameMode] Setting gamemode to {} for player {}", gameMode, this.profile.getName());
     this.gameMode = gameMode;
     UpsertPlayerInfoPacket.Entry upsertEntry = this.tabList.createRawEntry(this);
     upsertEntry.setGameMode(gameMode);
