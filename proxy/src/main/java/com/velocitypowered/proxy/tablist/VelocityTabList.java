@@ -272,6 +272,7 @@ public class VelocityTabList implements InternalTabList {
     }
     if (actions.contains(UpsertPlayerInfoPacket.Action.UPDATE_GAME_MODE)) {
       currentEntry.setGameModeWithoutUpdate(entry.getGameMode());
+      logger.info("[GameMode] Player {} gamemode changed to {}", entry.getProfile().getName(), entry.getGameMode());
     }
     if (actions.contains(UpsertPlayerInfoPacket.Action.UPDATE_LATENCY)) {
       currentEntry.setLatencyWithoutUpdate(entry.getLatency());
