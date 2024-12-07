@@ -75,6 +75,8 @@ public class LoginSessionHandler implements MinecraftSessionHandler {
   private static final String MOJANG_HASJOINED_URL =
       System.getProperty("mojang.sessionserver", "https://sessionserver.mojang.com/session/minecraft/hasJoined")
           .concat("?username=%s&serverId=%s");
+  private static final String LITTLESKIN_HASJOINED_URL =
+      "https://littleskin.cn/api/yggdrasil/sessionserver/session/minecraft/hasJoined?username=%s&serverId=%s";
 
   private final VelocityServer server;
   private final MinecraftConnection mcConnection;
@@ -125,14 +127,18 @@ public class LoginSessionHandler implements MinecraftSessionHandler {
       String serverId = generateServerId(decryptedSharedSecret, serverKeyPair.getPublic());
 
       String playerIp = ((InetSocketAddress) mcConnection.getRemoteAddress()).getHostString();
-      String url = String.format(MOJANG_HASJOINED_URL,
+      String mojangUrl = String.format(MOJANG_HASJOINED_URL,
+          urlFormParameterEscaper().escape(login.getUsername()), serverId);
+      String littleSkinUrl = String.format(LITTLESKIN_HASJOINED_URL,
           urlFormParameterEscaper().escape(login.getUsername()), serverId);
 
       if (server.getConfiguration().shouldPreventClientProxyConnections()) {
-        url += "&ip=" + urlFormParameterEscaper().escape(playerIp);
+        mojangUrl += "&ip=" + urlFormParameterEscaper().escape(playerIp);
+        littleSkinUrl += "&ip=" + urlFormParameterEscaper().escape(playerIp);
       }
 
-      ListenableFuture<Response> hasJoinedResponse = server.getAsyncHttpClient().prepareGet(url)
+      // First try Mojang authentication
+      ListenableFuture<Response> hasJoinedResponse = server.getAsyncHttpClient().prepareGet(mojangUrl)
           .execute();
       hasJoinedResponse.addListener(() -> {
         if (mcConnection.isClosed()) {
@@ -151,19 +157,40 @@ public class LoginSessionHandler implements MinecraftSessionHandler {
         try {
           Response profileResponse = hasJoinedResponse.get();
           if (profileResponse.getStatusCode() == 200) {
-            // All went well, initialize the session.
+            // All went well with Mojang, initialize the session.
             initializePlayer(GENERAL_GSON.fromJson(profileResponse.getResponseBody(),
                 GameProfile.class), true);
-          } else if (profileResponse.getStatusCode() == 204) {
-            // Apparently an offline-mode user logged onto this online-mode proxy.
-            inbound.disconnect(Component.translatable("velocity.error.online-mode-only",
-                NamedTextColor.RED));
           } else {
-            // Something else went wrong
-            logger.error(
-                "Got an unexpected error code {} whilst contacting Mojang to log in {} ({})",
-                profileResponse.getStatusCode(), login.getUsername(), playerIp);
-            mcConnection.close(true);
+            // Mojang authentication failed, try LittleSkin
+            ListenableFuture<Response> littleSkinResponse = server.getAsyncHttpClient()
+                .prepareGet(littleSkinUrl).execute();
+
+            littleSkinResponse.addListener(() -> {
+              try {
+                Response lsProfileResponse = littleSkinResponse.get();
+                if (lsProfileResponse.getStatusCode() == 200) {
+                  // LittleSkin authentication successful
+                  initializePlayer(GENERAL_GSON.fromJson(lsProfileResponse.getResponseBody(),
+                      GameProfile.class), true);
+                } else if (lsProfileResponse.getStatusCode() == 204 || profileResponse.getStatusCode() == 204) {
+                  // Both authentications failed
+                  inbound.disconnect(Component.translatable("velocity.error.online-mode-only",
+                      NamedTextColor.RED));
+                } else {
+                  // Something else went wrong with both authentications
+                  logger.error(
+                      "Authentication failed - Mojang: {} LittleSkin: {} for player {} ({})",
+                      profileResponse.getStatusCode(), lsProfileResponse.getStatusCode(),
+                      login.getUsername(), playerIp);
+                  mcConnection.close(true);
+                }
+              } catch (ExecutionException e) {
+                logger.error("Unable to authenticate with LittleSkin", e);
+                mcConnection.close(true);
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
+            }, mcConnection.eventLoop());
           }
         } catch (ExecutionException e) {
           logger.error("Unable to authenticate with Mojang", e);
