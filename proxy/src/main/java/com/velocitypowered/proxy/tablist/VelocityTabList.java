@@ -248,6 +248,7 @@ public class VelocityTabList implements InternalTabList {
     UUID profileId = entry.getProfileId();
     VelocityTabListEntry currentEntry = this.entries.get(profileId);
     if (actions.contains(UpsertPlayerInfoPacket.Action.ADD_PLAYER)) {
+      logger.info("[GameMode Debug] Processing ADD_PLAYER action for {}", entry.getProfile().getName());
       if (currentEntry == null) {
         this.entries.put(profileId,
             currentEntry = new VelocityTabListEntry(
@@ -261,16 +262,21 @@ public class VelocityTabList implements InternalTabList {
                 0
             )
         );
+        logger.info("[GameMode Debug] Created new tab list entry for {}", entry.getProfile().getName());
       } else {
-        logger.debug("Received an add player packet for an existing entry; this does nothing.");
+        logger.debug("[GameMode Debug] Received an add player packet for an existing entry; this does nothing.");
       }
     } else if (currentEntry == null) {
       logger.debug(
-          "Received a partial player before an ADD_PLAYER action; profile could not be built. {}",
+          "[GameMode Debug] Received a partial player before an ADD_PLAYER action; profile could not be built. {}",
           entry);
       return;
     }
     if (actions.contains(UpsertPlayerInfoPacket.Action.UPDATE_GAME_MODE)) {
+      logger.info("[GameMode Debug] Processing game mode update for {} from {} to {}", 
+          entry.getProfile().getName(), 
+          currentEntry.getGameMode(),
+          entry.getGameMode());
       currentEntry.setGameModeWithoutUpdate(entry.getGameMode());
       logger.info("[GameMode] Player {} gamemode changed to {}", entry.getProfile().getName(), entry.getGameMode());
     }

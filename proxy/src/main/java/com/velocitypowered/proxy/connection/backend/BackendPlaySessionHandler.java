@@ -54,6 +54,7 @@ import com.velocitypowered.proxy.protocol.packet.ClientSettingsPacket;
 import com.velocitypowered.proxy.protocol.packet.ClientboundCookieRequestPacket;
 import com.velocitypowered.proxy.protocol.packet.ClientboundStoreCookiePacket;
 import com.velocitypowered.proxy.protocol.packet.DisconnectPacket;
+import com.velocitypowered.proxy.protocol.packet.JoinGamePacket;
 import com.velocitypowered.proxy.protocol.packet.KeepAlivePacket;
 import com.velocitypowered.proxy.protocol.packet.LegacyPlayerListItemPacket;
 import com.velocitypowered.proxy.protocol.packet.PluginMessagePacket;
@@ -340,6 +341,14 @@ public class BackendPlaySessionHandler implements MinecraftSessionHandler {
 
   @Override
   public boolean handle(UpsertPlayerInfoPacket packet) {
+    logger.info("[GameMode Debug] Received UpsertPlayerInfoPacket with actions: {}", packet.getActions());
+    for (UpsertPlayerInfoPacket.Entry entry : packet.getEntries()) {
+      logger.info("[GameMode Debug] Entry for player {}: gameMode={}, actions={}, profile={}", 
+          entry.getProfile() != null ? entry.getProfile().getName() : "unknown",
+          entry.getGameMode(),
+          packet.getActions(),
+          entry.getProfile());
+    }
     serverConn.getPlayer().getTabList().processUpdate(packet);
     return false;
   }
@@ -439,6 +448,12 @@ public class BackendPlaySessionHandler implements MinecraftSessionHandler {
         }, playerConnection.eventLoop());
 
     return true;
+  }
+
+  @Override
+  public boolean handle(JoinGamePacket packet) {
+    logger.info("[GameMode Debug] Received JoinGamePacket: gameMode={}", packet.getGameMode());
+    return false;
   }
 
   @Override
