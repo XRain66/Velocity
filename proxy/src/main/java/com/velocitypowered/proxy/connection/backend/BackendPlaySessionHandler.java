@@ -343,11 +343,12 @@ public class BackendPlaySessionHandler implements MinecraftSessionHandler {
   public boolean handle(UpsertPlayerInfoPacket packet) {
     logger.info("[GameMode Debug] Received UpsertPlayerInfoPacket with actions: {}", packet.getActions());
     for (UpsertPlayerInfoPacket.Entry entry : packet.getEntries()) {
-      logger.info("[GameMode Debug] Entry for player {}: gameMode={}, actions={}, profile={}", 
+      logger.info("[GameMode Debug] Entry for player {}: gameMode={}, actions={}, profile={}, previousGameMode={}", 
           entry.getProfile() != null ? entry.getProfile().getName() : "unknown",
           entry.getGameMode(),
           packet.getActions(),
-          entry.getProfile());
+          entry.getProfile(),
+          serverConn.getPlayer().getGameMode());
     }
     serverConn.getPlayer().getTabList().processUpdate(packet);
     return false;
@@ -452,7 +453,8 @@ public class BackendPlaySessionHandler implements MinecraftSessionHandler {
 
   @Override
   public boolean handle(JoinGamePacket packet) {
-    logger.info("[GameMode Debug] Received JoinGamePacket: gameMode={}", packet.getGameMode());
+    logger.info("[GameMode Debug] Received JoinGamePacket: gameMode={}, previousGameMode={}, isHardcore={}", 
+        packet.getGamemode(), packet.getPreviousGamemode(), packet.getIsHardcore());
     return false;
   }
 
