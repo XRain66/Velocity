@@ -17,4 +17,32 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build with Gradle
-      run: ./gradlew build
+      uses: gradle/gradle-build-action@v2
+      with:
+        arguments: build
+
+    - name: Upload Velocity Proxy Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: Velocity-Proxy
+        path: proxy/build/libs/velocity-proxy-*.jar
+        if-no-files-found: error
+
+    - name: Upload API Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: Velocity-API
+        path: api/build/libs/velocity-api-*.jar
+        if-no-files-found: error
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          proxy/build/libs/velocity-proxy-*.jar
+          api/build/libs/velocity-api-*.jar
+        draft: false
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
