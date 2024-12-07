@@ -247,8 +247,14 @@ public class VelocityTabList implements InternalTabList {
     Preconditions.checkNotNull(entry.getProfileId(), "Profile ID cannot be null");
     UUID profileId = entry.getProfileId();
     VelocityTabListEntry currentEntry = this.entries.get(profileId);
+    
+    logger.info("[GameMode Debug] Processing UpsertPlayerInfoPacket for {} with actions: {}", 
+        entry.getProfile() != null ? entry.getProfile().getName() : profileId, 
+        actions);
+
     if (actions.contains(UpsertPlayerInfoPacket.Action.ADD_PLAYER)) {
-      logger.info("[GameMode Debug] Processing ADD_PLAYER action for {}", entry.getProfile().getName());
+      logger.info("[GameMode Debug] Processing ADD_PLAYER action for {}", 
+          entry.getProfile() != null ? entry.getProfile().getName() : profileId);
       if (currentEntry == null) {
         this.entries.put(profileId,
             currentEntry = new VelocityTabListEntry(
@@ -262,7 +268,8 @@ public class VelocityTabList implements InternalTabList {
                 0
             )
         );
-        logger.info("[GameMode Debug] Created new tab list entry for {}", entry.getProfile().getName());
+        logger.info("[GameMode Debug] Created new tab list entry for {}", 
+            entry.getProfile() != null ? entry.getProfile().getName() : profileId);
       } else {
         logger.debug("[GameMode Debug] Received an add player packet for an existing entry; this does nothing.");
       }
@@ -272,13 +279,20 @@ public class VelocityTabList implements InternalTabList {
           entry);
       return;
     }
+
     if (actions.contains(UpsertPlayerInfoPacket.Action.UPDATE_GAME_MODE)) {
-      logger.info("[GameMode Debug] Processing game mode update for {} from {} to {}", 
-          entry.getProfile().getName(), 
-          currentEntry.getGameMode(),
-          entry.getGameMode());
-      currentEntry.setGameModeWithoutUpdate(entry.getGameMode());
-      logger.info("[GameMode] Player {} gamemode changed to {}", entry.getProfile().getName(), entry.getGameMode());
+      int oldGameMode = currentEntry.getGameMode();
+      int newGameMode = entry.getGameMode();
+      logger.info("[GameMode Debug] Processing game mode update for {}: {} -> {}", 
+          entry.getProfile() != null ? entry.getProfile().getName() : profileId,
+          getGameModeName(oldGameMode),
+          getGameModeName(newGameMode));
+      
+      currentEntry.setGameModeWithoutUpdate(newGameMode);
+      logger.info("[GameMode] Player {} gamemode changed from {} to {}", 
+          entry.getProfile() != null ? entry.getProfile().getName() : profileId,
+          getGameModeName(oldGameMode),
+          getGameModeName(newGameMode));
     }
     if (actions.contains(UpsertPlayerInfoPacket.Action.UPDATE_LATENCY)) {
       currentEntry.setLatencyWithoutUpdate(entry.getLatency());
@@ -295,6 +309,21 @@ public class VelocityTabList implements InternalTabList {
     }
     if (actions.contains(UpsertPlayerInfoPacket.Action.UPDATE_LIST_ORDER)) {
       currentEntry.setListOrderWithoutUpdate(entry.getListOrder());
+    }
+  }
+
+  private String getGameModeName(int gameMode) {
+    switch (gameMode) {
+      case 0:
+        return "SURVIVAL";
+      case 1:
+        return "CREATIVE";
+      case 2:
+        return "ADVENTURE";
+      case 3:
+        return "SPECTATOR";
+      default:
+        return "UNKNOWN(" + gameMode + ")";
     }
   }
 

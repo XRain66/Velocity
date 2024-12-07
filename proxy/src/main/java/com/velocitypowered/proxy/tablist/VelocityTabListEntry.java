@@ -125,16 +125,46 @@ public class VelocityTabListEntry implements TabListEntry {
 
   @Override
   public TabListEntry setGameMode(int gameMode) {
-    logger.info("[GameMode] Setting gamemode to {} for player {}", gameMode, this.profile.getName());
+    int oldGameMode = this.gameMode;
+    logger.info("[GameMode Debug] Setting gamemode for player {}: {} -> {}", 
+        this.profile.getName(), 
+        getGameModeName(oldGameMode), 
+        getGameModeName(gameMode));
+    
     this.gameMode = gameMode;
     UpsertPlayerInfoPacket.Entry upsertEntry = this.tabList.createRawEntry(this);
     upsertEntry.setGameMode(gameMode);
     this.tabList.emitActionRaw(UpsertPlayerInfoPacket.Action.UPDATE_GAME_MODE, upsertEntry);
+    
+    logger.info("[GameMode] Player {} gamemode changed from {} to {}", 
+        this.profile.getName(), 
+        getGameModeName(oldGameMode), 
+        getGameModeName(gameMode));
     return this;
   }
 
   void setGameModeWithoutUpdate(int gameMode) {
+    int oldGameMode = this.gameMode;
+    logger.info("[GameMode Debug] Setting gamemode without update for player {}: {} -> {}", 
+        this.profile.getName(), 
+        getGameModeName(oldGameMode), 
+        getGameModeName(gameMode));
     this.gameMode = gameMode;
+  }
+
+  private String getGameModeName(int gameMode) {
+    switch (gameMode) {
+      case 0:
+        return "SURVIVAL";
+      case 1:
+        return "CREATIVE";
+      case 2:
+        return "ADVENTURE";
+      case 3:
+        return "SPECTATOR";
+      default:
+        return "UNKNOWN(" + gameMode + ")";
+    }
   }
 
   protected void setChatSession(@Nullable ChatSession session) {

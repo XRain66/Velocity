@@ -343,12 +343,11 @@ public class BackendPlaySessionHandler implements MinecraftSessionHandler {
   public boolean handle(UpsertPlayerInfoPacket packet) {
     logger.info("[GameMode Debug] Received UpsertPlayerInfoPacket with actions: {}", packet.getActions());
     for (UpsertPlayerInfoPacket.Entry entry : packet.getEntries()) {
-      logger.info("[GameMode Debug] Entry for player {}: gameMode={}, actions={}, profile={}, previousGameMode={}", 
+      logger.info("[GameMode Debug] Entry for player {}: gameMode={}, actions={}, profile={}", 
           entry.getProfile() != null ? entry.getProfile().getName() : "unknown",
           entry.getGameMode(),
           packet.getActions(),
-          entry.getProfile(),
-          serverConn.getPlayer().getGameMode());
+          entry.getProfile());
     }
     serverConn.getPlayer().getTabList().processUpdate(packet);
     return false;
